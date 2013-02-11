@@ -1,5 +1,6 @@
 /*
  * Copyright 2010-2012 Luca Garulli (l.garulli--at--orientechnologies.com)
+ * Copyright 2013 Geomatys.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,80 +14,77 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.orientechnologies.orient.core.sql;
-
-import java.util.Map;
+package com.orientechnologies.orient.core.sql.command;
 
 import com.orientechnologies.orient.core.Orient;
+import java.util.Map;
+
 import com.orientechnologies.orient.core.command.OCommandDistributedReplicateRequest;
 import com.orientechnologies.orient.core.command.OCommandRequest;
-import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.db.record.ODatabaseRecord;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.metadata.security.ODatabaseSecurityResources;
 import com.orientechnologies.orient.core.metadata.security.ORole;
+import com.orientechnologies.orient.core.sql.OCommandSQLParsingException;
+import com.orientechnologies.orient.core.sql.parser.OSQLParser;
+import com.orientechnologies.orient.core.sql.parser.SQLGrammarUtils;
 
 /**
  * SQL CREATE CLUSTER command: Creates a new cluster.
  * 
  * @author Luca Garulli
+ * @author Johann Sorel (Geomatys)
  * 
  */
-@SuppressWarnings("unchecked")
-public class OCommandExecutorSQLCreateCluster extends OCommandExecutorSQLAbstract implements OCommandDistributedReplicateRequest {
-  public static final String KEYWORD_CREATE      = "CREATE";
-  public static final String KEYWORD_CLUSTER     = "CLUSTER";
+public class OCommandCreateCluster extends OCommandAbstract implements OCommandDistributedReplicateRequest{
+  
+  public static final String KEYWORD_CREATE = "CREATE";
+  public static final String KEYWORD_CLUSTER = "CLUSTER";
   public static final String KEYWORD_DATASEGMENT = "DATASEGMENT";
-  public static final String KEYWORD_LOCATION    = "LOCATION";
-  public static final String KEYWORD_POSITION    = "POSITION";
+  public static final String KEYWORD_LOCATION = "LOCATION";
+  public static final String KEYWORD_POSITION = "POSITION";
 
-  private String             clusterName;
-  private String             clusterType;
-  private String             dataSegmentName     = "default";
-  private String             location            = "default";
-  private String             position            = "append";
+  private String clusterName;
+  private String clusterType;
+  private String dataSegmentName = "default";
+  private String location = "default";
+  private String position = "append";
+  
+  public OCommandCreateCluster() {
+  }
 
-  public OCommandExecutorSQLCreateCluster parse(final OCommandRequest iRequest) {
+  public OCommandCreateCluster parse(final OCommandRequest iRequest) {    
     final ODatabaseRecord database = getDatabase();
     database.checkSecurity(ODatabaseSecurityResources.COMMAND, ORole.PERMISSION_READ);
 
-    init(((OCommandRequestText) iRequest).getText());
-
-    parserRequiredKeyword(KEYWORD_CREATE);
-    parserRequiredKeyword(KEYWORD_CLUSTER);
-
-    clusterName = parserRequiredWord(false);
-    clusterType = parserRequiredWord(false);
-
-    String temp = parseOptionalWord(true);
-
-    while (temp != null) {
-      if (temp.equals(KEYWORD_DATASEGMENT)) {
-        dataSegmentName = parserRequiredWord(false);
-
-      } else if (temp.equals(KEYWORD_LOCATION)) {
-        location = parserRequiredWord(false);
-
-      } else if (temp.equals(KEYWORD_POSITION)) {
-        position = parserRequiredWord(false);
-
-      }
-
-      temp = parseOptionalWord(true);
-      if (parserIsEnded())
-        break;
+    final OSQLParser.CommandCreateClusterContext candidate = SQLGrammarUtils
+            .getCommand(iRequest, OSQLParser.CommandCreateClusterContext.class);
+    
+    int i=0;
+    clusterName = candidate.word(i++).getText();
+    clusterType = candidate.word(i++).getText();
+    
+    if(candidate.DATASEGMENT() != null){
+      dataSegmentName = candidate.word(i++).getText();
     }
-
+    if(candidate.LOCATION() != null){
+      location = candidate.word(i++).getText();
+    }
+    if(candidate.POSITION()!= null){
+      position = candidate.word(i++).getText();
+    }
+    
     final int clusterId = database.getStorage().getClusterIdByName(clusterName);
-    if (clusterId > -1)
+    if (clusterId > -1){
       throw new OCommandSQLParsingException("Cluster '" + clusterName + "' already exists");
-
+    }
     final int dataId = database.getStorage().getDataSegmentIdByName(dataSegmentName);
-    if (dataId == -1)
+    if (dataId == -1){
       throw new OCommandSQLParsingException("Data segment '" + dataSegmentName + "' does not exists");
-
-    if (!Orient.instance().getClusterFactory().isSupported(clusterType))
+    }
+    if (!Orient.instance().getClusterFactory().isSupported(clusterType)){
       throw new OCommandSQLParsingException("Cluster type '" + clusterType + "' is not supported");
+    }
 
     return this;
   }
@@ -107,4 +105,5 @@ public class OCommandExecutorSQLCreateCluster extends OCommandExecutorSQLAbstrac
   public String getSyntax() {
     return "CREATE CLUSTER <name> <type> [DATASEGMENT <data-segment>|default] [LOCATION <path>|default] [POSITION <position>|append]";
   }
+  
 }
